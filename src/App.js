@@ -8,14 +8,12 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 // Debug: Log the environment variable
 console.log('🔍 Environment variable REACT_APP_BACKEND_URL:', process.env.REACT_APP_BACKEND_URL);
 console.log('🔍 BACKEND_URL constant:', BACKEND_URL);
-
 // Check if environment variable is missing
 if (!BACKEND_URL) {
   console.error('❌ REACT_APP_BACKEND_URL is not defined in .env file!');
   console.error('❌ Please create a .env file in the feedback-frontend directory with:');
   console.error('❌ REACT_APP_BACKEND_URL=https://your-backend-url.com');
 }
-
 // Function to test backend URL (only deployed)
 const testBackendUrls = async () => {
   const url = BACKEND_URL;
@@ -632,9 +630,12 @@ function ViewFeedback() {
   const navigate = useNavigate();
   const [feedbacks, setFeedbacks] = React.useState({ students: [], parents: [], alumni: [] });
   const [activeTab, setActiveTab] = React.useState('students');
-  const [loading, setLoading] = React.useState(true);
+  const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
   const [connectionStatus, setConnectionStatus] = React.useState('checking');
+  const [isAuthenticated, setIsAuthenticated] = React.useState(false);
+  const [password, setPassword] = React.useState('');
+  const [passwordError, setPasswordError] = React.useState('');
 
   // Simple filter state
   const [selectedFilter, setSelectedFilter] = React.useState('all');
@@ -643,6 +644,23 @@ function ViewFeedback() {
   const STUDENT_URL = 'https://feedback-backend-hbme.onrender.com/studentfeedback/all';
   const PARENT_URL = 'https://feedback-backend-hbme.onrender.com/parentfeedback/all';
   const ALUMNI_URL = 'https://feedback-backend-hbme.onrender.com/alumnifeedback/all';
+
+  // Admin password (you can change this to any password you want)
+  const ADMIN_PASSWORD = 'admin123';
+
+  // Handle password submission
+  const handlePasswordSubmit = (e) => {
+    e.preventDefault();
+    if (password === ADMIN_PASSWORD) {
+      setIsAuthenticated(true);
+      setPasswordError('');
+      // Load data after successful authentication
+      fetchAllFeedbacks();
+    } else {
+      setPasswordError('Incorrect password. Please try again.');
+      setPassword('');
+    }
+  };
 
   // Check connection by pinging all endpoints
   const checkConnection = async () => {
@@ -696,14 +714,56 @@ function ViewFeedback() {
     setLoading(false);
   }, []);
 
-  // Load feedback data when component mounts
+  // Check connection when component mounts
   React.useEffect(() => {
-    const initializeData = async () => {
-      await checkConnection();
-      await fetchAllFeedbacks();
-    };
-    initializeData();
-  }, [fetchAllFeedbacks]);
+    checkConnection();
+  }, []);
+
+  // Password protection screen
+  if (!isAuthenticated) {
+    return (
+      <div className="view-page">
+        <div className="page-header">
+          <button className="back-button" onClick={() => navigate('/')}>← Back to Home</button>
+          <h1>Admin Access Required</h1>
+        </div>
+        
+        <div className="password-protection">
+          <div className="password-form-container">
+            <div className="password-form">
+              <h2>🔒 Enter Admin Password</h2>
+              <p>Please enter the admin password to view feedback data.</p>
+              
+              <form onSubmit={handlePasswordSubmit}>
+                <div className="form-group">
+                  <label htmlFor="password">Password:</label>
+                  <input
+                    type="password"
+                    id="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter admin password"
+                    required
+                    autoFocus
+                  />
+                </div>
+                
+                {passwordError && (
+                  <div className="error-message">
+                    <p>{passwordError}</p>
+                  </div>
+                )}
+                
+                <button type="submit" className="submit-button">
+                  🔓 Access Dashboard
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const formatFeedbackData = (feedback) => {
     console.log('Processing feedback:', feedback);
