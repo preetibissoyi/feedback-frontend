@@ -2,8 +2,54 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
 import './App.css';
 
-// Backend URL from environment variable
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'https://feedback-backend-hbme.onrender.com';
+// Backend URL configuration - use environment variable from .env file
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+
+// Debug: Log the environment variable
+console.log('🔍 Environment variable REACT_APP_BACKEND_URL:', process.env.REACT_APP_BACKEND_URL);
+console.log('🔍 BACKEND_URL constant:', BACKEND_URL);
+
+// Check if environment variable is missing
+if (!BACKEND_URL) {
+  console.error('❌ REACT_APP_BACKEND_URL is not defined in .env file!');
+  console.error('❌ Please create a .env file in the feedback-frontend directory with:');
+  console.error('❌ REACT_APP_BACKEND_URL=https://your-backend-url.com');
+}
+
+// Function to test backend URL (only deployed)
+const testBackendUrls = async () => {
+  const url = BACKEND_URL;
+  
+  // Safety check for undefined URL
+  if (!url) {
+    console.error('❌ BACKEND_URL is undefined! Cannot test connection.');
+    return null;
+  }
+  
+  try {
+    console.log(`🔍 Testing URL: ${url}`);
+    const response = await fetch(`${url}/`, { 
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 5000
+    });
+    if (response.ok) {
+      const text = await response.text();
+      try {
+        const data = JSON.parse(text);
+        if (data.feedbacks !== undefined) {
+          console.log(`✅ Working backend found: ${url}`);
+          return url;
+        }
+      } catch (e) {
+        console.log(`❌ URL ${url} returned non-JSON response`);
+      }
+    }
+  } catch (error) {
+    console.log(`❌ URL ${url} failed:`, error.message);
+  }
+  return null;
+};
 
 // Homepage Component
 function HomePage() {
@@ -12,11 +58,9 @@ function HomePage() {
   const handleFormClick = (formType) => {
     navigate(`/feedback/${formType}`);
   };
-
   const handleViewClick = () => {
     navigate('/view');
   };
-
   return (
     <div className="homepage">
       <div className="hero-section">
@@ -57,7 +101,6 @@ function HomePage() {
     </div>
   );
 }
-
 // Student Feedback Form Component
 function StudentFeedbackForm() {
   const navigate = useNavigate();
@@ -129,7 +172,7 @@ function StudentFeedbackForm() {
         });
       }
     } catch (err) {
-      setMessage('Failed to submit feedback.');
+      setMessage('Failed to submit feedback. Please check your connection.');
     }
     setLoading(false);
   };
@@ -314,7 +357,7 @@ function ParentFeedbackForm() {
         });
       }
     } catch (err) {
-      setMessage('Failed to submit feedback.');
+      setMessage('Failed to submit feedback. Please check your connection.');
     }
     setLoading(false);
   };
@@ -496,7 +539,7 @@ function AlumniFeedbackForm() {
         });
       }
     } catch (err) {
-      setMessage('Failed to submit feedback.');
+      setMessage('Failed to submit feedback. Please check your connection.');
     }
     setLoading(false);
   };
@@ -589,74 +632,105 @@ function ViewFeedback() {
   const navigate = useNavigate();
   const [feedbacks, setFeedbacks] = React.useState({ students: [], parents: [], alumni: [] });
   const [activeTab, setActiveTab] = React.useState('students');
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState(null);
+  const [connectionStatus, setConnectionStatus] = React.useState('checking');
 
-  const handleViewFeedback = async () => {
+  // Simple filter state
+  const [selectedFilter, setSelectedFilter] = React.useState('all');
+
+  // API endpoints
+  const STUDENT_URL = 'https://feedback-backend-hbme.onrender.com/studentfeedback/all';
+  const PARENT_URL = 'https://feedback-backend-hbme.onrender.com/parentfeedback/all';
+  const ALUMNI_URL = 'https://feedback-backend-hbme.onrender.com/alumnifeedback/all';
+
+  // Check connection by pinging all endpoints
+  const checkConnection = async () => {
     try {
-      console.log('Fetching from:', `${BACKEND_URL}/`);
-      const res = await fetch(`${BACKEND_URL}/`);
-      console.log('Response status:', res.status);
-      
-      if (res.ok) {
-        const data = await res.json();
-        console.log('Raw response data:', data);
-        console.log('Total feedbacks:', data.totalFeedbacks);
-        console.log('Feedbacks array:', data.feedbacks);
-        
-        // Organize feedbacks by type
-        const organized = {
-          students: data.feedbacks?.filter(f => f.type === 'student') || [],
-          parents: data.feedbacks?.filter(f => f.type === 'parent') || [],
-          alumni: data.feedbacks?.filter(f => f.type === 'alumni') || []
-        };
-        
-        console.log('Organized feedbacks:', organized);
-        console.log('Student count:', organized.students.length);
-        console.log('Parent count:', organized.parents.length);
-        console.log('Alumni count:', organized.alumni.length);
-        
-        setFeedbacks(organized);
+      const [studentRes, parentRes, alumniRes] = await Promise.all([
+        fetch(STUDENT_URL),
+        fetch(PARENT_URL),
+        fetch(ALUMNI_URL)
+      ]);
+      if (studentRes.ok && parentRes.ok && alumniRes.ok) {
+        setConnectionStatus('connected');
+        return true;
       } else {
-        console.error('Response not ok:', res.status, res.statusText);
-        const errorText = await res.text();
-        console.error('Error response:', errorText);
+        setConnectionStatus('disconnected');
+        return false;
       }
     } catch (err) {
-      console.error('Failed to fetch feedback:', err);
+      setConnectionStatus('disconnected');
+      return false;
     }
   };
 
+  // Fetch all feedbacks from all endpoints
+  const fetchAllFeedbacks = React.useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [studentRes, parentRes, alumniRes] = await Promise.all([
+        fetch(STUDENT_URL),
+        fetch(PARENT_URL),
+        fetch(ALUMNI_URL)
+      ]);
+      if (!studentRes.ok || !parentRes.ok || !alumniRes.ok) {
+        setError('Failed to fetch one or more feedback types.');
+        setLoading(false);
+        return;
+      }
+      const [studentData, parentData, alumniData] = await Promise.all([
+        studentRes.json(),
+        parentRes.json(),
+        alumniRes.json()
+      ]);
+      setFeedbacks({
+        students: studentData.feedbacks || [],
+        parents: parentData.feedbacks || [],
+        alumni: alumniData.feedbacks || []
+      });
+    } catch (err) {
+      setError('Failed to fetch feedback data.');
+    }
+    setLoading(false);
+  }, []);
+
   // Load feedback data when component mounts
   React.useEffect(() => {
-    handleViewFeedback();
-  }, []);
+    const initializeData = async () => {
+      await checkConnection();
+      await fetchAllFeedbacks();
+    };
+    initializeData();
+  }, [fetchAllFeedbacks]);
 
   const formatFeedbackData = (feedback) => {
     console.log('Processing feedback:', feedback);
-    const data = feedback.rawFormData || feedback;
-    console.log('Using data:', data);
+    
+    // Use the feedback object directly since it's already structured
     const sections = [];
     
     // Basic Info
-    if (data.studentName || data.name) {
-      sections.push({
-        title: 'Basic Information',
-        data: {
-          'Name': data.studentName || data.name,
-          'Year': data.studentYear || data.yearOfStudy,
-          'Major': data.studentMajor || data.major,
-          'Student ID': data.studentId,
-          'Email': data.email,
-          'Parent Name': data.parentName,
-          'Graduation Year': data.graduationYear,
-          'Profession': data.profession
-        }
-      });
+    const basicInfo = {};
+    if (feedback.studentName) basicInfo['Student Name'] = feedback.studentName;
+    if (feedback.name) basicInfo['Name'] = feedback.name;
+    if (feedback.studentYear) basicInfo['Year'] = feedback.studentYear;
+    if (feedback.studentMajor) basicInfo['Major'] = feedback.studentMajor;
+    if (feedback.studentId) basicInfo['Student ID'] = feedback.studentId;
+    if (feedback.email) basicInfo['Email'] = feedback.email;
+    if (feedback.parentName) basicInfo['Parent Name'] = feedback.parentName;
+    if (feedback.graduationYear) basicInfo['Graduation Year'] = feedback.graduationYear;
+    if (feedback.profession) basicInfo['Profession'] = feedback.profession;
+    
+    if (Object.keys(basicInfo).length > 0) {
+      sections.push({ title: 'Basic Information', data: basicInfo });
     }
     
     // Academic Experience
-    if (data.academicExperience) {
+    if (feedback.academicExperience) {
       const academicData = {};
-      Object.entries(data.academicExperience).forEach(([key, value]) => {
+      Object.entries(feedback.academicExperience).forEach(([key, value]) => {
         if (value) {
           const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
           academicData[label] = value;
@@ -668,9 +742,9 @@ function ViewFeedback() {
     }
     
     // Academic Resources
-    if (data.academicResources) {
+    if (feedback.academicResources) {
       const resourceData = {};
-      Object.entries(data.academicResources).forEach(([key, value]) => {
+      Object.entries(feedback.academicResources).forEach(([key, value]) => {
         if (value) {
           const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
           resourceData[label] = value;
@@ -682,9 +756,9 @@ function ViewFeedback() {
     }
     
     // Campus Life
-    if (data.campusLife) {
+    if (feedback.campusLife) {
       const campusData = {};
-      Object.entries(data.campusLife).forEach(([key, value]) => {
+      Object.entries(feedback.campusLife).forEach(([key, value]) => {
         if (value) {
           const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
           campusData[label] = value;
@@ -696,9 +770,9 @@ function ViewFeedback() {
     }
     
     // Facilities
-    if (data.facilities) {
+    if (feedback.facilities) {
       const facilityData = {};
-      Object.entries(data.facilities).forEach(([key, value]) => {
+      Object.entries(feedback.facilities).forEach(([key, value]) => {
         if (value) {
           const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
           facilityData[label] = value;
@@ -710,9 +784,9 @@ function ViewFeedback() {
     }
     
     // Alumni Engagement
-    if (data.alumniEngagement) {
+    if (feedback.alumniEngagement) {
       const alumniData = {};
-      Object.entries(data.alumniEngagement).forEach(([key, value]) => {
+      Object.entries(feedback.alumniEngagement).forEach(([key, value]) => {
         if (value && value.length > 0) {
           const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
           alumniData[label] = Array.isArray(value) ? value.join(', ') : value;
@@ -724,9 +798,9 @@ function ViewFeedback() {
     }
     
     // Overall Feedback
-    if (data.overallFeedback) {
+    if (feedback.overallFeedback) {
       const overallData = {};
-      Object.entries(data.overallFeedback).forEach(([key, value]) => {
+      Object.entries(feedback.overallFeedback).forEach(([key, value]) => {
         if (value) {
           const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
           overallData[label] = value;
@@ -737,7 +811,6 @@ function ViewFeedback() {
       }
     }
     
-    console.log('Generated sections:', sections);
     return sections;
   };
 
@@ -750,77 +823,142 @@ function ViewFeedback() {
       
       <div className="feedback-dashboard">
         <div className="dashboard-header">
-          <h2>Feedback Dashboard</h2>
+          <div className="dashboard-title">
+            <h2>Feedback Dashboard</h2>
+            <div className="connection-status">
+              <span className={`status-indicator ${connectionStatus}`}>
+                {connectionStatus === 'connected' ? '🟢' : connectionStatus === 'checking' ? '🟡' : '🔴'}
+              </span>
+              <span className="status-text">
+                {connectionStatus === 'connected' ? 'Connected' : connectionStatus === 'checking' ? 'Checking...' : 'Disconnected'}
+              </span>
+            </div>
+            <button onClick={fetchAllFeedbacks} className="refresh-button" title="Refresh data">
+              🔄
+            </button>
+            <button onClick={async () => {
+              setError(null);
+              const url = await testBackendUrls();
+              if (url) {
+                setError(`✅ Backend connection successful: ${url}`);
+              } else {
+                setError('❌ No working backend found. Please check server status.');
+              }
+            }} className="test-button" title="Test connection">
+              🔗
+            </button>
+          </div>
           <div className="stats-summary">
-            <div className="stat-card">
-              <span className="stat-number">{feedbacks.students.length}</span>
-              <span className="stat-label">Students</span>
-            </div>
-            <div className="stat-card">
-              <span className="stat-number">{feedbacks.parents.length}</span>
-              <span className="stat-label">Parents</span>
-            </div>
-            <div className="stat-card">
-              <span className="stat-number">{feedbacks.alumni.length}</span>
-              <span className="stat-label">Alumni</span>
-            </div>
+            <button onClick={fetchAllFeedbacks} className="fetch-all-button" title="Fetch all feedback data">
+              📊 Fetch All Feedback
+            </button>
           </div>
         </div>
         
-        <div className="tab-navigation">
-          <button 
-            className={`tab-button ${activeTab === 'students' ? 'active' : ''}`}
-            onClick={() => setActiveTab('students')}
-          >
-            Students ({feedbacks.students.length})
-          </button>
-          <button 
-            className={`tab-button ${activeTab === 'parents' ? 'active' : ''}`}
-            onClick={() => setActiveTab('parents')}
-          >
-            Parents ({feedbacks.parents.length})
-          </button>
-          <button 
-            className={`tab-button ${activeTab === 'alumni' ? 'active' : ''}`}
-            onClick={() => setActiveTab('alumni')}
-          >
-            Alumni ({feedbacks.alumni.length})
-          </button>
-        </div>
+        {error && (
+          <div className="error-message">
+            <p>{error}</p>
+            <button onClick={fetchAllFeedbacks} className="retry-button">Retry</button>
+          </div>
+        )}
         
-        <div className="feedback-list">
-          {feedbacks[activeTab].length === 0 ? (
-            <div className="no-feedback">
-              <p>No {activeTab} feedback found.</p>
-            </div>
-          ) : (
-            feedbacks[activeTab].map((feedback, index) => (
-              <div key={feedback.id || index} className="feedback-item">
-                <div className="feedback-header">
-                  <span className="feedback-number">#{index + 1}</span>
-                  <span className="feedback-date">
-                    {new Date(feedback.submittedAt || feedback.createdAt).toLocaleDateString()}
-                  </span>
-                </div>
-                <div className="feedback-content">
-                  {formatFeedbackData(feedback).map((section, sectionIndex) => (
-                    <div key={sectionIndex} className="feedback-section">
-                      <h4>{section.title}</h4>
-                      <div className="section-data">
-                        {Object.entries(section.data).map(([key, value]) => (
-                          <div key={key} className="data-row">
-                            <strong>{key}:</strong>
-                            <span>{value}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+        {loading && (
+          <div className="loading-message">
+            <p>Loading feedback data...</p>
+          </div>
+        )}
+        
+        {!loading && !error && (
+          <>
+            <div className="filter-controls">
+              <div className="filter-group">
+                <label>Filter by Type:</label>
+                <select 
+                  value={selectedFilter} 
+                  onChange={(e) => {
+                    setSelectedFilter(e.target.value);
+                  }}
+                >
+                  <option value="all">All Types</option>
+                  <option value="student">Students</option>
+                  <option value="parent">Parents</option>
+                  <option value="alumni">Alumni</option>
+                </select>
               </div>
-            ))
-          )}
-        </div>
+            </div>
+            
+            <div className="tab-navigation">
+              <button 
+                className={`tab-button ${activeTab === 'students' ? 'active' : ''}`}
+                onClick={() => setActiveTab('students')}
+              >
+                Students ({feedbacks.students.length})
+              </button>
+              <button 
+                className={`tab-button ${activeTab === 'parents' ? 'active' : ''}`}
+                onClick={() => setActiveTab('parents')}
+              >
+                Parents ({feedbacks.parents.length})
+              </button>
+              <button 
+                className={`tab-button ${activeTab === 'alumni' ? 'active' : ''}`}
+                onClick={() => setActiveTab('alumni')}
+              >
+                Alumni ({feedbacks.alumni.length})
+              </button>
+            </div>
+            
+            <div className="feedback-list">
+              {(() => {
+                let displayFeedbacks = [];
+                
+                if (selectedFilter === 'all') {
+                  displayFeedbacks = feedbacks[activeTab] || [];
+                } else if (selectedFilter === 'student') {
+                  displayFeedbacks = feedbacks.students || [];
+                } else if (selectedFilter === 'parent') {
+                  displayFeedbacks = feedbacks.parents || [];
+                } else if (selectedFilter === 'alumni') {
+                  displayFeedbacks = feedbacks.alumni || [];
+                }
+                
+                if (displayFeedbacks.length === 0) {
+                  return (
+                    <div className="no-feedback">
+                      <p>No {selectedFilter === 'all' ? activeTab : selectedFilter} feedback found.</p>
+                    </div>
+                  );
+                }
+                
+                return displayFeedbacks.map((feedback, index) => (
+                  <div key={feedback.id || index} className="feedback-item">
+                    <div className="feedback-header">
+                      <span className="feedback-number">#{index + 1}</span>
+                      <span className="feedback-date">
+                        {new Date(feedback.submittedAt || feedback.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <div className="feedback-content">
+                      {formatFeedbackData(feedback).map((section, sectionIndex) => (
+                        <div key={sectionIndex} className="feedback-section">
+                          <h4>{section.title}</h4>
+                          <div className="section-data">
+                            {Object.entries(section.data).map(([key, value]) => (
+                              <div key={key} className="data-row">
+                                <strong>{key}:</strong>
+                                <span>{value}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
