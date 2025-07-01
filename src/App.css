@@ -731,7 +731,6 @@ body {
   min-height: 60vh;
   padding: 2rem;
 }
-
 .password-form-container {
   background: white;
   border-radius: 15px;
@@ -741,25 +740,21 @@ body {
   width: 100%;
   text-align: center;
 }
-
 .password-form h2 {
   color: #667eea;
   margin-bottom: 1rem;
   font-size: 1.8rem;
 }
-
 .password-form p {
   color: #666;
   margin-bottom: 2rem;
   font-size: 1.1rem;
   line-height: 1.5;
 }
-
 .password-form .form-group {
   margin-bottom: 1.5rem;
   text-align: left;
 }
-
 .password-form label {
   display: block;
   margin-bottom: 0.5rem;

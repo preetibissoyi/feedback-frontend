@@ -2,52 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
 import './App.css';
 
-// Backend URL configuration - use environment variable from .env file
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-
-// Debug: Log the environment variable
-console.log('🔍 Environment variable REACT_APP_BACKEND_URL:', process.env.REACT_APP_BACKEND_URL);
-console.log('🔍 BACKEND_URL constant:', BACKEND_URL);
-// Check if environment variable is missing
-if (!BACKEND_URL) {
-  console.error('❌ REACT_APP_BACKEND_URL is not defined in .env file!');
-  console.error('❌ Please create a .env file in the feedback-frontend directory with:');
-  console.error('❌ REACT_APP_BACKEND_URL=https://your-backend-url.com');
-}
-// Function to test backend URL (only deployed)
-const testBackendUrls = async () => {
-  const url = BACKEND_URL;
-  
-  // Safety check for undefined URL
-  if (!url) {
-    console.error('❌ BACKEND_URL is undefined! Cannot test connection.');
-    return null;
-  }
-  
-  try {
-    console.log(`🔍 Testing URL: ${url}`);
-    const response = await fetch(`${url}/`, { 
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
-      timeout: 5000
-    });
-    if (response.ok) {
-      const text = await response.text();
-      try {
-        const data = JSON.parse(text);
-        if (data.feedbacks !== undefined) {
-          console.log(`✅ Working backend found: ${url}`);
-          return url;
-        }
-      } catch (e) {
-        console.log(`❌ URL ${url} returned non-JSON response`);
-      }
-    }
-  } catch (error) {
-    console.log(`❌ URL ${url} failed:`, error.message);
-  }
-  return null;
-};
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'https://feedback-backend-hbme.onrender.com';
 
 // Homepage Component
 function HomePage() {
@@ -641,9 +596,9 @@ function ViewFeedback() {
   const [selectedFilter, setSelectedFilter] = React.useState('all');
 
   // API endpoints
-  const STUDENT_URL = 'https://feedback-backend-hbme.onrender.com/studentfeedback/all';
-  const PARENT_URL = 'https://feedback-backend-hbme.onrender.com/parentfeedback/all';
-  const ALUMNI_URL = 'https://feedback-backend-hbme.onrender.com/alumnifeedback/all';
+  const STUDENT_URL = `${BACKEND_URL}/studentfeedback/all`;
+  const PARENT_URL = `${BACKEND_URL}/parentfeedback/all`;
+  const ALUMNI_URL = `${BACKEND_URL}/alumnifeedback/all`;
 
   // Admin password (you can change this to any password you want)
   const ADMIN_PASSWORD = 'admin123';
@@ -712,12 +667,12 @@ function ViewFeedback() {
       setError('Failed to fetch feedback data.');
     }
     setLoading(false);
-  }, []);
+  }, [STUDENT_URL, PARENT_URL, ALUMNI_URL]);
 
   // Check connection when component mounts
   React.useEffect(() => {
     checkConnection();
-  }, []);
+  }, [checkConnection]);
 
   // Password protection screen
   if (!isAuthenticated) {
@@ -895,17 +850,6 @@ function ViewFeedback() {
             </div>
             <button onClick={fetchAllFeedbacks} className="refresh-button" title="Refresh data">
               🔄
-            </button>
-            <button onClick={async () => {
-              setError(null);
-              const url = await testBackendUrls();
-              if (url) {
-                setError(`✅ Backend connection successful: ${url}`);
-              } else {
-                setError('❌ No working backend found. Please check server status.');
-              }
-            }} className="test-button" title="Test connection">
-              🔗
             </button>
           </div>
           <div className="stats-summary">
