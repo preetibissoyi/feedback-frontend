@@ -2,7 +2,12 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
 import './App.css';
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'https://feedback-backend-hbme.onrender.com';
+const BACKEND_URL =
+  process.env.REACT_APP_BACKEND_URL || 'https://feedback-backend-hbme.onrender.com';
+
+const STUDENT_ALL_URL = `${BACKEND_URL}/studentfeedback/all`;
+const PARENT_ALL_URL = `${BACKEND_URL}/parentfeedback/all`;
+const ALUMNI_ALL_URL = `${BACKEND_URL}/alumnifeedback/all`;
 
 // Homepage Component
 function HomePage() {
@@ -595,11 +600,6 @@ function ViewFeedback() {
   // Simple filter state
   const [selectedFilter, setSelectedFilter] = React.useState('all');
 
-  // API endpoints
-  const STUDENT_URL = `${BACKEND_URL}/studentfeedback/all`;
-  const PARENT_URL = `${BACKEND_URL}/parentfeedback/all`;
-  const ALUMNI_URL = `${BACKEND_URL}/alumnifeedback/all`;
-
   // Admin password (you can change this to any password you want)
   const ADMIN_PASSWORD = 'admin123';
 
@@ -618,12 +618,12 @@ function ViewFeedback() {
   };
 
   // Check connection by pinging all endpoints
-  const checkConnection = async () => {
+  const checkConnection = React.useCallback(async () => {
     try {
       const [studentRes, parentRes, alumniRes] = await Promise.all([
-        fetch(STUDENT_URL),
-        fetch(PARENT_URL),
-        fetch(ALUMNI_URL)
+        fetch(STUDENT_ALL_URL),
+        fetch(PARENT_ALL_URL),
+        fetch(ALUMNI_ALL_URL)
       ]);
       if (studentRes.ok && parentRes.ok && alumniRes.ok) {
         setConnectionStatus('connected');
@@ -636,7 +636,7 @@ function ViewFeedback() {
       setConnectionStatus('disconnected');
       return false;
     }
-  };
+  }, []);
 
   // Fetch all feedbacks from all endpoints
   const fetchAllFeedbacks = React.useCallback(async () => {
@@ -644,9 +644,9 @@ function ViewFeedback() {
     setError(null);
     try {
       const [studentRes, parentRes, alumniRes] = await Promise.all([
-        fetch(STUDENT_URL),
-        fetch(PARENT_URL),
-        fetch(ALUMNI_URL)
+        fetch(STUDENT_ALL_URL),
+        fetch(PARENT_ALL_URL),
+        fetch(ALUMNI_ALL_URL)
       ]);
       if (!studentRes.ok || !parentRes.ok || !alumniRes.ok) {
         setError('Failed to fetch one or more feedback types.');
@@ -667,7 +667,7 @@ function ViewFeedback() {
       setError('Failed to fetch feedback data.');
     }
     setLoading(false);
-  }, [STUDENT_URL, PARENT_URL, ALUMNI_URL]);
+  }, []);
 
   // Check connection when component mounts
   React.useEffect(() => {
